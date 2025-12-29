@@ -95,55 +95,91 @@ function loadD3() {
 }
 
 async function loadTopoJSON() {
-  const libraryAvailable = () => typeof topojson !== 'undefined' && typeof topojson.feature === 'function';
-  if (libraryAvailable()) return;
-  if (topojsonLoadingPromise) return topojsonLoadingPromise;
+  // Check if already available
+  if (typeof topojson !== 'undefined' && typeof topojson.feature === 'function') {
+    console.log('TopoJSON already available');
+    return;
+  }
+  
+  if (topojsonLoadingPromise) {
+    console.log('TopoJSON loading already in progress');
+    return topojsonLoadingPromise;
+  }
 
-  topojsonLoadingPromise = new Promise((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-
+  topojsonLoadingPromise = new Promise((resolve, reject) => {
     const existingScript = document.querySelector('script[data-lib="topojson-client"]');
+    
+    // If script exists, wait for it
     if (existingScript) {
       const loadState = existingScript.dataset.loadState;
+      console.log('TopoJSON script exists with state:', loadState);
+      
       if (loadState === 'loaded') {
-        finish();
+        if (typeof topojson !== 'undefined' && typeof topojson.feature === 'function') {
+          console.log('TopoJSON verified available');
+          resolve();
+        } else {
+          console.error('TopoJSON script loaded but library not available');
+          reject(new Error('TopoJSON library not accessible'));
+        }
         return;
       }
+      
       if (loadState === 'failed') {
+        console.log('Removing failed script');
         existingScript.remove();
       } else {
+        // Wait for existing script to load
         existingScript.addEventListener('load', () => {
           existingScript.dataset.loadState = 'loaded';
-          finish();
+          if (typeof topojson !== 'undefined' && typeof topojson.feature === 'function') {
+            console.log('TopoJSON loaded via existing script');
+            resolve();
+          } else {
+            console.error('Script loaded but TopoJSON not available');
+            reject(new Error('TopoJSON library not accessible'));
+          }
         }, { once: true });
+        
         existingScript.addEventListener('error', () => {
           existingScript.dataset.loadState = 'failed';
           existingScript.remove();
-          finish();
+          console.error('TopoJSON script failed to load');
+          reject(new Error('Failed to load TopoJSON'));
         }, { once: true });
         return;
       }
     }
 
+    // Create new script
+    console.log('Creating new TopoJSON script');
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/topojson-client/3.1.0/topojson-client.min.js';
     script.async = true;
     script.dataset.lib = 'topojson-client';
     script.dataset.loadState = 'loading';
+    
     script.onload = () => {
       script.dataset.loadState = 'loaded';
-      finish();
+      
+      // Wait a bit for the library to be available
+      setTimeout(() => {
+        if (typeof topojson !== 'undefined' && typeof topojson.feature === 'function') {
+          console.log('TopoJSON loaded and verified');
+          resolve();
+        } else {
+          console.error('TopoJSON script loaded but library not available in global scope');
+          reject(new Error('TopoJSON library not accessible'));
+        }
+      }, 50);
     };
+    
     script.onerror = () => {
       script.dataset.loadState = 'failed';
-      script.remove();
-      finish();
+      console.error('Failed to load TopoJSON script');
+      reject(new Error('Failed to load TopoJSON'));
     };
+    
     document.head.appendChild(script);
   }).finally(() => {
     topojsonLoadingPromise = null;
@@ -164,19 +200,69 @@ async function loadWorldData() {
 }
 
 function topoToFeatures(topo, objectName) {
-  if (typeof topojson !== 'undefined' && topojson.feature) {
-    return topojson.feature(topo, topo.objects[objectName]).features;
+  if (typeof topojson === 'undefined' || !topojson.feature) {
+    console.error('TopoJSON library not available');
+    return [];
   }
-  // Minimal internal converter fallback: if topojson isn't available, bail.
-  return [];
+  
+  try {
+    const result = topojson.feature(topo, topo.objects[objectName]);
+    console.log(`TopoJSON conversion successful: ${result.features.length} features from '${objectName}'`);
+    return result.features;
+  } catch (err) {
+    console.error('TopoJSON conversion error:', err);
+    return [];
+  }
 }
 
 function extractWorldFeatures(worldData) {
-  if (!worldData) return [];
-  if (worldData.type === 'FeatureCollection' && Array.isArray(worldData.features)) return worldData.features;
-  if (worldData.type === 'Topology' && worldData.objects?.countries) {
-    return topoToFeatures(worldData, 'countries') || [];
+  if (!worldData) {
+    console.error('No world data provided');
+    return [];
   }
+  
+  console.log('World data type:', worldData.type);
+  
+  // If already GeoJSON FeatureCollection
+  if (worldData.type === 'FeatureCollection' && Array.isArray(worldData.features)) {
+    console.log('Data is already FeatureCollection with', worldData.features.length, 'features');
+    return worldData.features;
+  }
+  
+  // If TopoJSON
+  if (worldData.type === 'Topology' && worldData.objects) {
+    console.log('Data is Topology, available objects:', Object.keys(worldData.objects));
+    
+    // Check if topojson library is available
+    if (typeof topojson === 'undefined' || !topojson.feature) {
+      console.error('TopoJSON library required but not available');
+      return [];
+    }
+    
+    // Try 'countries' first (most common)
+    if (worldData.objects.countries) {
+      console.log('Using "countries" object');
+      return topoToFeatures(worldData, 'countries');
+    }
+    
+    // Try other common names
+    const alternativeNames = ['country', 'land', 'admin0', 'ne_110m_admin_0_countries'];
+    for (const name of alternativeNames) {
+      if (worldData.objects[name]) {
+        console.log(`Using "${name}" object`);
+        return topoToFeatures(worldData, name);
+      }
+    }
+    
+    // Try the first available object
+    const firstKey = Object.keys(worldData.objects)[0];
+    if (firstKey) {
+      console.log(`Using first available object: "${firstKey}"`);
+      return topoToFeatures(worldData, firstKey);
+    }
+  }
+  
+  console.error('Could not extract features from world data');
   return [];
 }
 
@@ -263,10 +349,20 @@ export async function createSelectableWorldMap(containerId, {
     if (world?.type === 'Topology') {
       console.log('Loading TopoJSON library...');
       try { 
-        await loadTopoJSON(); 
-        console.log('TopoJSON loaded');
+        await loadTopoJSON();
+        
+        // Give TopoJSON a moment to be fully available
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Verify it's really available
+        if (typeof topojson === 'undefined' || typeof topojson.feature !== 'function') {
+          throw new Error('TopoJSON loaded but not accessible');
+        }
+        
+        console.log('TopoJSON loaded and verified');
       } catch (err) { 
-        console.warn('TopoJSON loading failed, will try to continue:', err);
+        console.error('TopoJSON loading failed:', err);
+        throw err; // Re-throw to trigger fallback
       }
     }
 
@@ -284,7 +380,7 @@ export async function createSelectableWorldMap(containerId, {
 
     if (features.length === 0) {
       console.error('No map features extracted');
-      renderFallbackList('Unable to load map data. Using country list instead.');
+      renderFallbackList('Unable to extract map features. Using country list instead.');
       return;
     }
 
