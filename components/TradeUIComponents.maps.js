@@ -4,6 +4,69 @@
 let d3LoadingPromise = null;
 let topojsonLoadingPromise = null;
 
+function renderFallbackCountryList(container, {
+  countries = [],
+  selectedCountries = [],
+  onCountryToggle,
+  title,
+  subtitle
+} = {}) {
+  const selected = new Set((selectedCountries || []).map(c => String(c).toUpperCase()));
+  container.innerHTML = `
+    <div style="width:100%; max-width: 720px; text-align:left;">
+      <div style="font-size:14px; color:#374151; font-weight:600; margin-bottom:4px;">${title || 'Select origin countries'}</div>
+      <div style="font-size:12px; color:#6b7280; margin-bottom:10px;">${subtitle || 'Map unavailable. Use the list below to pick countries.'}</div>
+      <input id="${container.id || 'fallback'}-filter" type="search" placeholder="Search country…" style="width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:8px; margin-bottom:10px; font-size:14px;" />
+      <div id="${container.id || 'fallback'}-list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:8px; max-height:340px; overflow:auto; padding-right:4px;"></div>
+    </div>
+  `;
+
+  const filterInput = container.querySelector('input[type="search"]');
+  const listEl = container.querySelector(`#${container.id || 'fallback'}-list`);
+
+  const renderList = () => {
+    const q = (filterInput?.value || '').trim().toLowerCase();
+    const filtered = countries
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .filter(c => !q || c.name.toLowerCase().includes(q) || String(c.iso || '').toLowerCase().includes(q));
+
+    listEl.innerHTML = filtered.map(c => {
+      const iso = String(c.iso || c.isoCode || '').toUpperCase();
+      const isSelected = selected.has(iso);
+      return `
+        <button data-iso="${iso}" style="
+          text-align:left;
+          padding:10px 12px;
+          border:1px solid ${isSelected ? '#1d4ed8' : '#e5e7eb'};
+          background:${isSelected ? '#e0e7ff' : 'white'};
+          color:${isSelected ? '#1d4ed8' : '#111827'};
+          border-radius:10px;
+          font-size:13px;
+          cursor:pointer;
+          transition:background 120ms ease, border-color 120ms ease;
+        ">
+          ${c.name}
+          ${iso ? `<span style="display:block; color:#6b7280; font-size:11px; margin-top:2px;">${iso}</span>` : ''}
+        </button>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('button[data-iso]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const iso = btn.dataset.iso;
+        if (!iso) return;
+        if (selected.has(iso)) selected.delete(iso); else selected.add(iso);
+        if (onCountryToggle) onCountryToggle(iso);
+        renderList();
+      });
+    });
+  };
+
+  if (filterInput) filterInput.addEventListener('input', renderList);
+  renderList();
+}
+
 function loadD3() {
   if (typeof d3 !== 'undefined') return Promise.resolve();
   if (d3LoadingPromise) return d3LoadingPromise;
@@ -170,7 +233,19 @@ export async function createSelectableWorldMap(containerId, {
   if (loading) loading.remove();
 
   if (!wrapper || features.length === 0) {
-    if (wrapper) wrapper.innerHTML = '<div style="padding: 18px; color: #6b7280;">Map could not be loaded.</div>';
+    if (wrapper) {
+      wrapper.innerHTML = '<div style="padding: 12px; color: #6b7280;">Map could not be loaded from the CDN. Select countries using the list below instead.</div>';
+      const fallback = document.createElement('div');
+      fallback.id = `${containerId}-fallback-list`;
+      wrapper.appendChild(fallback);
+      renderFallbackCountryList(fallback, {
+        countries,
+        selectedCountries,
+        onCountryToggle,
+        title,
+        subtitle
+      });
+    }
     return;
   }
 
