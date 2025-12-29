@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Trade Digitalisation Benefits Calculator</title>
+  <style>
+    /* Keep minimal baseline; the app modules include their own styling conventions */
+    html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #app { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module">
+    import TradeAppController from './components/TradeAppController.js';
+    new TradeAppController(document.getElementById('app'));
+  </script>
+</body>
+</html>
