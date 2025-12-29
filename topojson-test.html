@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TopoJSON Test</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .result {
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      font-family: monospace;
+    }
+    .success { background: #d1fae5; border: 2px solid #10b981; }
+    .error { background: #fee2e2; border: 2px solid #ef4444; }
+    .info { background: #dbeafe; border: 2px solid #3b82f6; }
+    button {
+      padding: 12px 24px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      margin: 5px;
+    }
+    button:hover { background: #2563eb; }
+  </style>
+</head>
+<body>
+  <h1>🗺️ TopoJSON Conversion Test</h1>
+  <p>This page tests whether TopoJSON can properly convert world-atlas topology data to GeoJSON features.</p>
+  
+  <button onclick="runTest()">Run Test</button>
+  <button onclick="location.reload()">Reset</button>
+  
+  <div id="results"></div>
+
+  <script>
+    async function addResult(message, type = 'info') {
+      const div = document.createElement('div');
+      div.className = `result ${type}`;
+      div.textContent = message;
+      document.getElementById('results').appendChild(div);
+    }
+
+    async function runTest() {
+      document.getElementById('results').innerHTML = '';
+      
+      try {
+        // Step 1: Load D3
+        addResult('Step 1: Loading D3.js...', 'info');
+        if (typeof d3 === 'undefined') {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        }
+        addResult('✓ D3.js loaded: version ' + d3.version, 'success');
+
+        // Step 2: Load TopoJSON
+        addResult('Step 2: Loading TopoJSON...', 'info');
+        if (typeof topojson === 'undefined') {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/topojson-client/3.1.0/topojson-client.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+          
+          // Wait a bit for library to initialize
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        if (typeof topojson === 'undefined' || typeof topojson.feature !== 'function') {
+          throw new Error('TopoJSON not available after loading');
+        }
+        addResult('✓ TopoJSON loaded and verified', 'success');
+
+        // Step 3: Load world data
+        addResult('Step 3: Loading world-atlas data...', 'info');
+        const response = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+        const worldData = await response.json();
+        addResult('✓ World data loaded: ' + worldData.type, 'success');
+        addResult('  Available objects: ' + Object.keys(worldData.objects).join(', '), 'info');
+
+        // Step 4: Convert to features
+        addResult('Step 4: Converting topology to features...', 'info');
+        
+        if (!worldData.objects.countries) {
+          throw new Error('No "countries" object found in topology');
+        }
+        
+        const geojson = topojson.feature(worldData, worldData.objects.countries);
+        addResult('✓ Conversion successful!', 'success');
+        addResult('  Features extracted: ' + geojson.features.length, 'success');
+        
+        // Step 5: Sample feature
+        if (geojson.features.length > 0) {
+          const sample = geojson.features[0];
+          addResult('Step 5: Sample feature details:', 'info');
+          addResult('  Type: ' + sample.type, 'info');
+          addResult('  Geometry type: ' + sample.geometry.type, 'info');
+          addResult('  Properties: ' + JSON.stringify(sample.properties).substring(0, 100) + '...', 'info');
+        }
+        
+        addResult('🎉 ALL TESTS PASSED!', 'success');
+        
+      } catch (error) {
+        addResult('❌ TEST FAILED: ' + error.message, 'error');
+        addResult('Stack: ' + error.stack, 'error');
+      }
+    }
+    
+    // Auto-run on load
+    window.addEventListener('load', () => {
+      setTimeout(runTest, 500);
+    });
+  </script>
+</body>
+</html>
