@@ -131,26 +131,24 @@ export function renderPanel1(containerId, { countries, state, onStateChange }) {
   const options = countries
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map(c => ({ value: c.isoCode, label: c.name }));
+    .map(c => ({ value: c.iso || c.isoCode, label: c.name }));
 
   mount(destWrap, makeSelect({
     options,
-    value: state.panel1.destinationCountry || '',
+    value: state.panel1.destinationCountryIso || '',
     placeholder: 'Select destination country…',
-    onChange: (v) => onStateChange({
-      panel1: { ...state.panel1, destinationCountry: v }
-    })
+    onChange: (v) => onStateChange('panel1', 'destinationCountryIso', v)
   }));
 
   const updateSelectedOrigins = () => {
     const box = container.querySelector('#selectedOrigins');
-    const selected = state.panel1.originCountries || [];
+    const selected = state.panel1.selectedSourceCountryIsos || [];
     if (!selected.length) {
       box.innerHTML = '<div style="color:#6b7280; font-size:13px; font-style:italic;">No origin countries selected yet.</div>';
       return;
     }
     const names = selected
-      .map(code => countries.find(c => c.isoCode === code)?.name || code)
+      .map(code => countries.find(c => (c.iso || c.isoCode) === code)?.name || code)
       .sort((a, b) => a.localeCompare(b));
 
     box.innerHTML = `
@@ -166,13 +164,13 @@ export function renderPanel1(containerId, { countries, state, onStateChange }) {
   // Render map
   createSelectableWorldMap(mapId, {
     countries,
-    selectedCountries: state.panel1.originCountries || [],
+    selectedCountries: state.panel1.selectedSourceCountryIsos || [],
     title: 'Click countries to select origins',
     subtitle: 'You can select multiple origin countries. Click again to deselect.',
     onCountryToggle: (iso3) => {
-      const current = new Set(state.panel1.originCountries || []);
+      const current = new Set(state.panel1.selectedSourceCountryIsos || []);
       if (current.has(iso3)) current.delete(iso3); else current.add(iso3);
-      onStateChange({ panel1: { ...state.panel1, originCountries: Array.from(current) } });
+      onStateChange('panel1', 'selectedSourceCountryIsos', Array.from(current));
       updateSelectedOrigins();
     },
     height: 420
@@ -185,7 +183,7 @@ export function renderPanel1(containerId, { countries, state, onStateChange }) {
     const wrap = container.querySelector(`#${id}-wrap`);
     mount(wrap, makeNumberInput({
       value: state.panel1[key] ?? 0,
-      onChange: (val) => onStateChange({ panel1: { ...state.panel1, [key]: val } })
+      onChange: (val) => onStateChange('panel1', key, val)
     }));
   };
 
@@ -238,7 +236,7 @@ export function renderPanel2(containerId, { state, onStateChange }) {
     const wrap = container.querySelector(`#${id}-wrap`);
     mount(wrap, makeNumberInput({
       value: state.panel2[key] ?? fallback,
-      onChange: (val) => onStateChange({ panel2: { ...state.panel2, [key]: val } })
+      onChange: (val) => onStateChange('panel2', key, val)
     }));
   };
 
@@ -253,7 +251,7 @@ export function renderPanel2(containerId, { state, onStateChange }) {
   const update = (v) => {
     const val = Number(v);
     valueEl.textContent = `${val}%`;
-    onStateChange({ panel2: { ...state.panel2, efficiencyPercent: val } });
+    onStateChange('panel2', 'efficiencyPercent', val);
   };
   slider.addEventListener('input', () => update(slider.value));
 }
@@ -298,7 +296,7 @@ export function renderPanel3(containerId, { state, onStateChange }) {
     const wrap = container.querySelector(`#${id}-wrap`);
     mount(wrap, makeNumberInput({
       value: state.panel3[key] ?? 0,
-      onChange: (val) => onStateChange({ panel3: { ...state.panel3, [key]: val } })
+      onChange: (val) => onStateChange('panel3', key, val)
     }));
   };
 

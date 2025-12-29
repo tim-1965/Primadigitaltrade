@@ -120,7 +120,8 @@ function extractWorldFeatures(worldData) {
 function buildIsoLookup(countries) {
   const lookup = new Map();
   (countries || []).forEach(c => {
-    if (c?.isoCode) lookup.set(String(c.isoCode).toUpperCase(), c);
+    const code = c?.iso || c?.isoCode;
+    if (code) lookup.set(String(code).toUpperCase(), c);
   });
   return lookup;
 }
