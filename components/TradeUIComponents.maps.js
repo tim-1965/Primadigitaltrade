@@ -379,7 +379,24 @@ export async function createSelectableWorldMap(containerId, {
 
     const mapGroup = svg.append('g');
 
-    mapGroup.selectAll('path')
+    // Function to update country styles based on selection state
+    const updateCountryStyle = (pathElement, d, isHover = false) => {
+      const iso = d.__iso;
+      const isSelected = selected.has(iso);
+      
+      if (isHover) {
+        d3.select(pathElement)
+          .style('fill', isSelected ? '#60a5fa' : '#e0e7ff')
+          .style('stroke-width', 2);
+      } else {
+        d3.select(pathElement)
+          .style('fill', isSelected ? '#93c5fd' : '#f1f5f9')
+          .style('stroke', isSelected ? '#1e40af' : '#cbd5e1')
+          .style('stroke-width', isSelected ? 1.8 : 0.6);
+      }
+    };
+
+    const countryPaths = mapGroup.selectAll('path')
       .data(features)
       .enter()
       .append('path')
@@ -402,23 +419,44 @@ export async function createSelectableWorldMap(containerId, {
       .style('transition', 'all 0.2s ease')
       .on('mouseover', function(event, d) {
         if (!d.__iso) return;
-        d3.select(this)
-          .style('fill', selected.has(d.__iso) ? '#60a5fa' : '#e0e7ff')
-          .style('stroke-width', 2);
+        updateCountryStyle(this, d, true);
       })
       .on('mouseout', function(event, d) {
         if (!d.__iso) return;
-        d3.select(this)
-          .style('fill', selected.has(d.__iso) ? '#93c5fd' : '#f1f5f9')
-          .style('stroke-width', selected.has(d.__iso) ? 1.8 : 0.6);
+        updateCountryStyle(this, d, false);
       })
-      .on('click', (event, d) => {
+      .on('click', function(event, d) {
         const iso = d.__iso;
         if (!iso) return;
-        console.log('Country clicked:', iso, isoLookup.get(iso)?.name);
-        if (onCountryToggle) onCountryToggle(iso);
-      })
-      .append('title')
+        
+        // Toggle selection
+        if (selected.has(iso)) {
+          selected.delete(iso);
+          console.log('Country deselected:', iso, isoLookup.get(iso)?.name);
+        } else {
+          selected.add(iso);
+          console.log('Country selected:', iso, isoLookup.get(iso)?.name);
+        }
+        
+        // Update this country's visual style immediately
+        updateCountryStyle(this, d, false);
+        
+        // Update the tooltip text
+        d3.select(this).select('title')
+          .text(() => {
+            const name = isoLookup.get(iso)?.name || d.__name || iso || 'Unknown';
+            const mark = selected.has(iso) ? ' ✓ Selected' : ' (click to select)';
+            return `${name}${mark}`;
+          });
+        
+        // Notify parent component
+        if (onCountryToggle) {
+          onCountryToggle(iso);
+        }
+      });
+
+    // Add tooltips
+    countryPaths.append('title')
       .text(d => {
         const iso = d.__iso;
         const name = isoLookup.get(iso)?.name || d.__name || iso || 'Unknown';
