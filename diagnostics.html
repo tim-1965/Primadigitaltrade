@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Trade Calculator - Map Diagnostics</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f8fafc;
+    }
+    .section {
+      background: white;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(15,23,42,0.08);
+    }
+    h1 { color: #0f172a; margin: 0 0 10px 0; }
+    h2 { color: #334155; margin: 0 0 16px 0; font-size: 18px; }
+    .status { 
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    .success { background: #d1fae5; border: 1px solid #86efac; color: #15803d; }
+    .error { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; }
+    .warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
+    .info { background: #dbeafe; border: 1px solid #93c5fd; color: #1e40af; }
+    button {
+      padding: 10px 16px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    button:hover { background: #2563eb; }
+    pre {
+      background: #f1f5f9;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+    code {
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    #console-output {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    .log-line { margin-bottom: 4px; }
+    .log-error { color: #fca5a5; }
+    .log-success { color: #86efac; }
+    .log-info { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <div class="section">
+    <h1>🔍 Map Loading Diagnostics</h1>
+    <p style="color: #64748b; margin: 8px 0 0 0;">
+      This page tests the map loading dependencies and helps diagnose issues.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>1. CDN Connectivity Tests</h2>
+    <div id="cdn-status">
+      <div class="status info">Running tests...</div>
+    </div>
+    <button onclick="testCDN()">Run CDN Tests</button>
+  </div>
+
+  <div class="section">
+    <h2>2. Library Loading Tests</h2>
+    <div id="library-status">
+      <div class="status info">Click button to test</div>
+    </div>
+    <button onclick="testLibraries()">Test D3 & TopoJSON</button>
+    <button onclick="clearCache()">Clear Cache & Reload</button>
+  </div>
+
+  <div class="section">
+    <h2>3. Application State</h2>
+    <div id="app-status">
+      <div class="status info">Load application to check</div>
+    </div>
+    <button onclick="checkAppState()">Check App State</button>
+    <button onclick="clearLocalStorage()">Clear localStorage</button>
+  </div>
+
+  <div class="section">
+    <h2>4. Quick Fixes</h2>
+    <button onclick="window.location.href='index.html'">Go to Calculator</button>
+    <button onclick="forceReset()">Force Reset Everything</button>
+    <button onclick="window.open('index.html', '_blank')">Open in New Tab</button>
+  </div>
+
+  <div class="section">
+    <h2>Console Output</h2>
+    <div id="console-output"></div>
+  </div>
+
+  <script>
+    const consoleOutput = document.getElementById('console-output');
+    const originalConsole = { log: console.log, error: console.error, warn: console.warn };
+    
+    function addLog(message, type = 'info') {
+      const line = document.createElement('div');
+      line.className = `log-line log-${type}`;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      consoleOutput.appendChild(line);
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+
+    // Intercept console
+    console.log = (...args) => {
+      originalConsole.log(...args);
+      addLog(args.join(' '), 'info');
+    };
+    console.error = (...args) => {
+      originalConsole.error(...args);
+      addLog(args.join(' '), 'error');
+    };
+    console.warn = (...args) => {
+      originalConsole.warn(...args);
+      addLog(args.join(' '), 'warn');
+    };
+
+    async function testCDN() {
+      const status = document.getElementById('cdn-status');
+      status.innerHTML = '<div class="status info">Testing CDN connectivity...</div>';
+      
+      const tests = [
+        {
+          name: 'D3.js (cdnjs)',
+          url: 'https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js'
+        },
+        {
+          name: 'TopoJSON (cdnjs)',
+          url: 'https://cdnjs.cloudflare.com/ajax/libs/topojson-client/3.1.0/topojson-client.min.js'
+        },
+        {
+          name: 'World Atlas (jsdelivr)',
+          url: 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
+        }
+      ];
+
+      let html = '';
+      for (const test of tests) {
+        try {
+          const start = Date.now();
+          const response = await fetch(test.url);
+          const time = Date.now() - start;
+          if (response.ok) {
+            html += `<div class="status success">✓ ${test.name} - ${time}ms</div>`;
+            console.log(`✓ ${test.name} loaded successfully in ${time}ms`);
+          } else {
+            html += `<div class="status error">✗ ${test.name} - HTTP ${response.status}</div>`;
+            console.error(`✗ ${test.name} failed with status ${response.status}`);
+          }
+        } catch (err) {
+          html += `<div class="status error">✗ ${test.name} - ${err.message}</div>`;
+          console.error(`✗ ${test.name} error:`, err.message);
+        }
+      }
+      status.innerHTML = html;
+    }
+
+    async function testLibraries() {
+      const status = document.getElementById('library-status');
+      status.innerHTML = '<div class="status info">Loading libraries...</div>';
+
+      let html = '';
+
+      // Test D3
+      try {
+        if (typeof d3 === 'undefined') {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js';
+            script.onload = () => {
+              console.log('D3 loaded successfully');
+              resolve();
+            };
+            script.onerror = () => reject(new Error('Failed to load D3'));
+            document.head.appendChild(script);
+          });
+        }
+        html += `<div class="status success">✓ D3.js v${d3.version} loaded</div>`;
+      } catch (err) {
+        html += `<div class="status error">✗ D3.js failed: ${err.message}</div>`;
+        console.error('D3 loading error:', err);
+      }
+
+      // Test TopoJSON
+      try {
+        if (typeof topojson === 'undefined') {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/topojson-client/3.1.0/topojson-client.min.js';
+            script.onload = () => {
+              console.log('TopoJSON loaded successfully');
+              resolve();
+            };
+            script.onerror = () => reject(new Error('Failed to load TopoJSON'));
+            document.head.appendChild(script);
+          });
+        }
+        html += `<div class="status success">✓ TopoJSON loaded</div>`;
+      } catch (err) {
+        html += `<div class="status error">✗ TopoJSON failed: ${err.message}</div>`;
+        console.error('TopoJSON loading error:', err);
+      }
+
+      // Test World Data
+      try {
+        const response = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+        const data = await response.json();
+        const features = data.type === 'Topology' && data.objects?.countries ? 
+          topojson.feature(data, data.objects.countries).features : [];
+        html += `<div class="status success">✓ World data loaded (${features.length} countries)</div>`;
+        console.log(`World topology loaded: ${features.length} features`);
+      } catch (err) {
+        html += `<div class="status error">✗ World data failed: ${err.message}</div>`;
+        console.error('World data error:', err);
+      }
+
+      status.innerHTML = html;
+    }
+
+    function checkAppState() {
+      const status = document.getElementById('app-status');
+      try {
+        const stateKey = 'tradeDigitalisationBenefitsState.v1';
+        const saved = localStorage.getItem(stateKey);
+        
+        let html = '';
+        if (saved) {
+          const state = JSON.parse(saved);
+          html += `<div class="status success">✓ Saved state found</div>`;
+          html += `<div class="status info">Active Panel: ${state.activePanel || 'Unknown'}</div>`;
+          html += `<div class="status info">Selected Origins: ${(state.panel1?.selectedSourceCountryIsos || []).length} countries</div>`;
+          console.log('Current state:', state);
+        } else {
+          html += `<div class="status warning">No saved state found (fresh start)</div>`;
+        }
+
+        if (typeof window.tradeDigitalisationApp !== 'undefined') {
+          html += `<div class="status success">✓ Application instance found</div>`;
+          console.log('App instance:', window.tradeDigitalisationApp);
+        } else {
+          html += `<div class="status warning">Application not yet loaded</div>`;
+        }
+
+        status.innerHTML = html;
+      } catch (err) {
+        status.innerHTML = `<div class="status error">Error: ${err.message}</div>`;
+        console.error('State check error:', err);
+      }
+    }
+
+    function clearLocalStorage() {
+      try {
+        const key = 'tradeDigitalisationBenefitsState.v1';
+        localStorage.removeItem(key);
+        addLog('localStorage cleared', 'success');
+        checkAppState();
+      } catch (err) {
+        addLog('Error clearing localStorage: ' + err.message, 'error');
+      }
+    }
+
+    function clearCache() {
+      if (confirm('This will clear the browser cache and reload. Continue?')) {
+        caches.keys().then(names => {
+          names.forEach(name => caches.delete(name));
+        }).then(() => {
+          window.location.reload(true);
+        });
+      }
+    }
+
+    function forceReset() {
+      if (confirm('This will clear all data and reload the page. Continue?')) {
+        localStorage.clear();
+        sessionStorage.clear();
+        caches.keys().then(names => {
+          names.forEach(name => caches.delete(name));
+        }).then(() => {
+          window.location.href = 'index.html';
+        });
+      }
+    }
+
+    // Auto-run CDN test on load
+    window.addEventListener('load', () => {
+      addLog('Diagnostic page loaded', 'success');
+      testCDN();
+    });
+  </script>
+</body>
+</html>
