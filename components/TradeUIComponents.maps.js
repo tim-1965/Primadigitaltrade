@@ -211,6 +211,26 @@ export async function createSelectableWorldMap(containerId, {
   const loadingId = `${containerId}-loading`;
   const mapWrapperId = `${containerId}-map-wrapper`;
 
+  const renderFallbackList = () => {
+    const wrapper = document.getElementById(mapWrapperId);
+    const loading = document.getElementById(loadingId);
+    if (loading) loading.remove();
+
+    if (!wrapper) return;
+
+    wrapper.innerHTML = '<div style="padding: 12px; color: #6b7280;">Map could not be loaded from the CDN. Select countries using the list below instead.</div>';
+    const fallback = document.createElement('div');
+    fallback.id = `${containerId}-fallback-list`;
+    wrapper.appendChild(fallback);
+    renderFallbackCountryList(fallback, {
+      countries,
+      selectedCountries,
+      onCountryToggle,
+      title,
+      subtitle
+    });
+  };
+
   container.innerHTML = `
     <div style="background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
       <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 6px;">${title}</h3>
@@ -221,33 +241,22 @@ export async function createSelectableWorldMap(containerId, {
     </div>
   `;
 
-  await loadD3();
-  const world = await loadWorldData();
-  if (world?.type === 'Topology') {
-    try { await loadTopoJSON(); } catch { /* fall through */ }
-  }
-
-  const features = extractWorldFeatures(world);
-  const wrapper = document.getElementById(mapWrapperId);
-  const loading = document.getElementById(loadingId);
-  if (loading) loading.remove();
-
-  if (!wrapper || features.length === 0) {
-    if (wrapper) {
-      wrapper.innerHTML = '<div style="padding: 12px; color: #6b7280;">Map could not be loaded from the CDN. Select countries using the list below instead.</div>';
-      const fallback = document.createElement('div');
-      fallback.id = `${containerId}-fallback-list`;
-      wrapper.appendChild(fallback);
-      renderFallbackCountryList(fallback, {
-        countries,
-        selectedCountries,
-        onCountryToggle,
-        title,
-        subtitle
-      });
+   try {
+    await loadD3();
+    const world = await loadWorldData();
+    if (world?.type === 'Topology') {
+      try { await loadTopoJSON(); } catch { /* fall through */ }
     }
-    return;
-  }
+
+   const features = extractWorldFeatures(world);
+    const wrapper = document.getElementById(mapWrapperId);
+    const loading = document.getElementById(loadingId);
+    if (loading) loading.remove();
+
+    if (!wrapper || features.length === 0) {
+      renderFallbackList();
+      return;
+    }
 
   const isoLookup = buildIsoLookup(countries);
   const selected = new Set((selectedCountries || []).map(c => String(c).toUpperCase()));
@@ -340,6 +349,10 @@ export async function createSelectableWorldMap(containerId, {
   };
 
   drawBtn(btn(0, '+'), '+');
-  drawBtn(btn(34, '−'), '−');
-  drawBtn(btn(68, '⟲'), '⟲');
+    drawBtn(btn(34, '−'), '−');
+    drawBtn(btn(68, '⟲'), '⟲');
+  } catch (error) {
+    console.warn('Failed to render map, falling back to country list:', error);
+    renderFallbackList();
+  }
 }
