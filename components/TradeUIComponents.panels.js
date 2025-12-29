@@ -129,7 +129,7 @@ function mount(el, node) {
   el.appendChild(node);
 }
 
-export function renderPanel1(containerId, { countries, state, onStateChange }) {
+export function renderPanel1(containerId, { countries, state, onStateChange, onToggleCountry }) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -241,10 +241,9 @@ export function renderPanel1(containerId, { countries, state, onStateChange }) {
       title: 'Select origin countries',
       subtitle: 'Click countries to select or deselect. Use map zoom controls to navigate.',
       onCountryToggle: (iso3) => {
-        const current = new Set(state.panel1.selectedSourceCountryIsos || []);
-        if (current.has(iso3)) current.delete(iso3); else current.add(iso3);
-        onStateChange('panel1', 'selectedSourceCountryIsos', Array.from(current));
-        updateSelectedOrigins();
+        if (onToggleCountry) {
+          onToggleCountry(iso3);
+        }
       },
       height: 440,
       width: 960

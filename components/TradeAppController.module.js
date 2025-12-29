@@ -250,7 +250,8 @@ export class TradeAppController {
         renderPanel1('trade-panel-root', {
           countries: this.state.countries,
           state: this.state,
-          onStateChange: (panelKey, field, value) => ctx.update(panelKey, field, value)
+          onStateChange: (panelKey, field, value) => ctx.update(panelKey, field, value),
+          onToggleCountry: (iso) => ctx.toggleSourceCountry(iso)
         });
       } else if (activePanel === 2) {
         renderPanel2('trade-panel-root', {
