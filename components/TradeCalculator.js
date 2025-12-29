@@ -106,7 +106,7 @@ export function computeScenario({ label, discountPercent, uptakePercent, newDPO,
     costPerPerson: panel2.costPerPerson,
     headcountLogisticsCompliance: panel2.headcountLogisticsCompliance,
     headcountAccountsPayable: panel2.headcountAccountsPayable,
-    customsComplianceCostPerShipment: panel2.customsComplianceCostPerShipment,
+    customsAndComplianceCostPerShipment: panel2.customsAndComplianceCostPerShipment,
     ancillaryCostPerShipment: panel2.ancillaryCostPerShipment,
     efficiencyPercent: panel2.efficiencyPercent
   });
@@ -123,7 +123,7 @@ export function computeScenario({ label, discountPercent, uptakePercent, newDPO,
   // - discount benefit (if any), less the incremental funding impact implied by cash conversion change.
   const netFinancingBenefit = discountBenefit - cashConv.fundingImpact;
 
-  const totalAnnualBenefit = process.processSavings + netFinancingBenefit;
+  const totalAnnualBenefit = process.totalProcessSavings + netFinancingBenefit;
 
   const fin = computeFinancials(panel3);
   const netProfitAfter = fin.netProfit + totalAnnualBenefit;
@@ -152,7 +152,7 @@ export function computeScenario({ label, discountPercent, uptakePercent, newDPO,
     discountBenefit,
     fundingImpact: cashConv.fundingImpact,
     netFinancingBenefit,
-    processSavings: process.processSavings,
+    processSavings: process.totalProcessSavings,
     totalAnnualBenefit,
     netProfitBefore: fin.netProfit,
     netProfitAfter,

@@ -85,6 +85,8 @@ export class TradeAppController {
         revenue: 100000000,
         costOfSale: 70000000,
         operationalCosts: 25000000,
+        daysSalesOutstanding: 45,
+        daysInventoryOutstanding: 60,
         fundingRatePercent: 8
       }
     };

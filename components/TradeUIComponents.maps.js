@@ -206,19 +206,23 @@ export async function createSelectableWorldMap(containerId, {
   subtitle = 'Click countries to toggle selection.'
 } = {}) {
   const container = document.getElementById(containerId);
-  if (!container) return;
+  if (!container) {
+    console.error('Map container not found:', containerId);
+    return;
+  }
 
   const loadingId = `${containerId}-loading`;
   const mapWrapperId = `${containerId}-map-wrapper`;
 
-  const renderFallbackList = () => {
+  const renderFallbackList = (errorMessage = '') => {
     const wrapper = document.getElementById(mapWrapperId);
     const loading = document.getElementById(loadingId);
     if (loading) loading.remove();
 
     if (!wrapper) return;
 
-    wrapper.innerHTML = '<div style="padding: 12px; color: #6b7280;">Map could not be loaded from the CDN. Select countries using the list below instead.</div>';
+    const message = errorMessage || 'Map could not be loaded from the CDN. Select countries using the list below instead.';
+    wrapper.innerHTML = `<div style="padding: 12px; color: #6b7280; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 16px;">${message}</div>`;
     const fallback = document.createElement('div');
     fallback.id = `${containerId}-fallback-list`;
     wrapper.appendChild(fallback);
@@ -227,132 +231,196 @@ export async function createSelectableWorldMap(containerId, {
       selectedCountries,
       onCountryToggle,
       title,
-      subtitle
+      subtitle: 'Select countries from the list below'
     });
   };
 
   container.innerHTML = `
-    <div style="background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
-      <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 6px;">${title}</h3>
-      <div style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">${subtitle}</div>
-      <div id="${loadingId}" style="padding: 30px; color: #6b7280;">Loading map…</div>
+    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(15,23,42,0.08); border: 1px solid rgba(226,232,240,0.6); text-align: center;">
+      <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 6px; color: #334155;">${title}</h3>
+      <div style="font-size: 13px; color: #64748b; margin-bottom: 16px;">${subtitle}</div>
+      <div id="${loadingId}" style="padding: 30px; color: #64748b;">
+        <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <style>
+          @keyframes spin { to { transform: rotate(360deg); } }
+        </style>
+        <div style="margin-top: 12px;">Loading interactive map...</div>
+      </div>
       <div id="${mapWrapperId}" style="width: 100%; display: flex; justify-content: center;"></div>
-      <div style="margin-top: 12px; font-size: 12px; color: #6b7280;">Tip: use Ctrl/Cmd+scroll to zoom the page. Map zoom controls are included.</div>
+      <div style="margin-top: 12px; font-size: 12px; color: #94a3b8;">Tip: Use zoom controls on the map or Ctrl/Cmd+scroll to zoom.</div>
     </div>
   `;
 
-   try {
+  try {
+    console.log('Loading D3 library...');
     await loadD3();
+    console.log('D3 loaded successfully');
+    
+    console.log('Loading world topology data...');
     const world = await loadWorldData();
+    console.log('World data loaded:', world?.type);
+    
     if (world?.type === 'Topology') {
-      try { await loadTopoJSON(); } catch { /* fall through */ }
+      console.log('Loading TopoJSON library...');
+      try { 
+        await loadTopoJSON(); 
+        console.log('TopoJSON loaded');
+      } catch (err) { 
+        console.warn('TopoJSON loading failed, will try to continue:', err);
+      }
     }
 
-   const features = extractWorldFeatures(world);
+    const features = extractWorldFeatures(world);
+    console.log('Extracted features:', features.length);
+    
     const wrapper = document.getElementById(mapWrapperId);
     const loading = document.getElementById(loadingId);
     if (loading) loading.remove();
 
-    if (!wrapper || features.length === 0) {
-      renderFallbackList();
+    if (!wrapper) {
+      console.error('Map wrapper element not found');
       return;
     }
 
-  const isoLookup = buildIsoLookup(countries);
-  const selected = new Set((selectedCountries || []).map(c => String(c).toUpperCase()));
+    if (features.length === 0) {
+      console.error('No map features extracted');
+      renderFallbackList('Unable to load map data. Using country list instead.');
+      return;
+    }
 
-  // Estimate a reasonable width in the embed context.
-  const maxW = Math.min(width, (container.clientWidth || width));
-  const maxH = Math.max(320, height);
+    const isoLookup = buildIsoLookup(countries);
+    const selected = new Set((selectedCountries || []).map(c => String(c).toUpperCase()));
 
-  const svg = d3.select(wrapper)
-    .append('svg')
-    .attr('width', maxW)
-    .attr('height', maxH)
-    .attr('viewBox', `0 0 ${maxW} ${maxH}`)
-    .attr('role', 'img')
-    .attr('aria-label', 'Interactive world map for selecting source countries');
+    // Estimate a reasonable width in the embed context.
+    const maxW = Math.min(width, (container.clientWidth || width) - 48);
+    const maxH = Math.max(320, height);
 
-  const projection = d3.geoNaturalEarth1().fitSize([maxW, maxH], { type: 'FeatureCollection', features });
-  const path = d3.geoPath(projection);
+    console.log('Creating SVG map, dimensions:', maxW, 'x', maxH);
 
-  const mapGroup = svg.append('g');
+    const svg = d3.select(wrapper)
+      .append('svg')
+      .attr('width', maxW)
+      .attr('height', maxH)
+      .attr('viewBox', `0 0 ${maxW} ${maxH}`)
+      .attr('role', 'img')
+      .attr('aria-label', 'Interactive world map for selecting source countries')
+      .style('background', '#f8fafc')
+      .style('border-radius', '8px');
 
-  mapGroup.selectAll('path')
-    .data(features)
-    .enter()
-    .append('path')
-    .attr('d', path)
-    .each(function(d) {
-      const p = d?.properties || {};
-      const iso = normalizeIsoA3(p.ISO_A3 || p.iso_a3 || p.ADM0_A3 || p.id);
-      d.__iso = iso;
-      const name = p.NAME || p.name || null;
-      d.__name = name;
-    })
-    .style('fill', d => {
-      const iso = d.__iso;
-      if (!iso) return '#f3f4f6';
-      return selected.has(iso) ? '#dbeafe' : '#f3f4f6';
-    })
-    .style('stroke', d => (selected.has(d.__iso) ? '#111827' : '#e5e7eb'))
-    .style('stroke-width', d => (selected.has(d.__iso) ? 1.6 : 0.8))
-    .style('cursor', d => (d.__iso ? 'pointer' : 'default'))
-    .on('click', (event, d) => {
-      const iso = d.__iso;
-      if (!iso) return;
-      if (!isoLookup.has(iso)) {
-        // The country list comes from the RiskMap API; if we can't match, still toggle.
-      }
-      if (onCountryToggle) onCountryToggle(iso);
-    })
-    .append('title')
-    .text(d => {
-      const iso = d.__iso;
-      const name = isoLookup.get(iso)?.name || d.__name || iso || 'Unknown';
-      const mark = selected.has(iso) ? ' (selected)' : '';
-      return `${name}${mark}`;
+    const projection = d3.geoNaturalEarth1().fitSize([maxW, maxH], { type: 'FeatureCollection', features });
+    const path = d3.geoPath(projection);
+
+    const mapGroup = svg.append('g');
+
+    mapGroup.selectAll('path')
+      .data(features)
+      .enter()
+      .append('path')
+      .attr('d', path)
+      .each(function(d) {
+        const p = d?.properties || {};
+        const iso = normalizeIsoA3(p.ISO_A3 || p.iso_a3 || p.ADM0_A3 || p.id);
+        d.__iso = iso;
+        const name = p.NAME || p.name || null;
+        d.__name = name;
+      })
+      .style('fill', d => {
+        const iso = d.__iso;
+        if (!iso) return '#e2e8f0';
+        return selected.has(iso) ? '#93c5fd' : '#f1f5f9';
+      })
+      .style('stroke', d => (selected.has(d.__iso) ? '#1e40af' : '#cbd5e1'))
+      .style('stroke-width', d => (selected.has(d.__iso) ? 1.8 : 0.6))
+      .style('cursor', d => (d.__iso ? 'pointer' : 'default'))
+      .style('transition', 'all 0.2s ease')
+      .on('mouseover', function(event, d) {
+        if (!d.__iso) return;
+        d3.select(this)
+          .style('fill', selected.has(d.__iso) ? '#60a5fa' : '#e0e7ff')
+          .style('stroke-width', 2);
+      })
+      .on('mouseout', function(event, d) {
+        if (!d.__iso) return;
+        d3.select(this)
+          .style('fill', selected.has(d.__iso) ? '#93c5fd' : '#f1f5f9')
+          .style('stroke-width', selected.has(d.__iso) ? 1.8 : 0.6);
+      })
+      .on('click', (event, d) => {
+        const iso = d.__iso;
+        if (!iso) return;
+        console.log('Country clicked:', iso, isoLookup.get(iso)?.name);
+        if (onCountryToggle) onCountryToggle(iso);
+      })
+      .append('title')
+      .text(d => {
+        const iso = d.__iso;
+        const name = isoLookup.get(iso)?.name || d.__name || iso || 'Unknown';
+        const mark = selected.has(iso) ? ' ✓ Selected' : ' (click to select)';
+        return `${name}${mark}`;
+      });
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.5, 8])
+      .on('zoom', (event) => {
+        mapGroup.attr('transform', event.transform);
+      });
+
+    svg.call(zoom);
+
+    // Zoom controls
+    const controls = svg.append('g')
+      .attr('transform', `translate(${maxW - 60}, 20)`);
+    
+    const createButton = (y, label, action) => {
+      const g = controls.append('g')
+        .attr('transform', `translate(0, ${y})`)
+        .style('cursor', 'pointer')
+        .on('click', action)
+        .on('mouseover', function() {
+          d3.select(this).select('rect').style('fill', '#f1f5f9');
+        })
+        .on('mouseout', function() {
+          d3.select(this).select('rect').style('fill', '#ffffff');
+        });
+      
+      g.append('rect')
+        .attr('width', 40)
+        .attr('height', 32)
+        .attr('rx', 8)
+        .attr('ry', 8)
+        .style('fill', '#ffffff')
+        .style('stroke', '#cbd5e1')
+        .style('stroke-width', 1.5);
+      
+      g.append('text')
+        .attr('x', 20)
+        .attr('y', 20)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .style('font-size', '18px')
+        .style('font-weight', '600')
+        .style('fill', '#334155')
+        .style('pointer-events', 'none')
+        .text(label);
+      
+      return g;
+    };
+
+    createButton(0, '+', () => {
+      svg.transition().duration(200).call(zoom.scaleBy, 1.4);
+    });
+    
+    createButton(38, '−', () => {
+      svg.transition().duration(200).call(zoom.scaleBy, 1/1.4);
+    });
+    
+    createButton(76, '⟲', () => {
+      svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
     });
 
-  const zoom = d3.zoom().scaleExtent([0.5, 8]).on('zoom', (event) => {
-    mapGroup.attr('transform', event.transform);
-  });
-
-  svg.call(zoom);
-
-  // Zoom controls
-  const controls = svg.append('g').attr('transform', `translate(${maxW - 54}, 18)`);
-  const btn = (y, label) => controls.append('g')
-    .attr('transform', `translate(0, ${y})`)
-    .style('cursor', 'pointer')
-    .on('click', () => {
-      if (label === '+') svg.transition().duration(200).call(zoom.scaleBy, 1.35);
-      if (label === '−') svg.transition().duration(200).call(zoom.scaleBy, 1/1.35);
-      if (label === '⟲') svg.transition().duration(200).call(zoom.transform, d3.zoomIdentity);
-    });
-
-  const drawBtn = (g, label) => {
-    g.append('rect')
-      .attr('width', 36)
-      .attr('height', 28)
-      .attr('rx', 6)
-      .attr('ry', 6)
-      .style('fill', '#ffffff')
-      .style('stroke', '#d1d5db');
-    g.append('text')
-      .attr('x', 18)
-      .attr('y', 18)
-      .attr('text-anchor', 'middle')
-      .style('font-size', '16px')
-      .style('fill', '#111827')
-      .text(label);
-  };
-
-  drawBtn(btn(0, '+'), '+');
-    drawBtn(btn(34, '−'), '−');
-    drawBtn(btn(68, '⟲'), '⟲');
+    console.log('Map rendered successfully');
   } catch (error) {
-    console.warn('Failed to render map, falling back to country list:', error);
-    renderFallbackList();
+    console.error('Failed to render map:', error);
+    renderFallbackList(`Map loading failed: ${error.message}. Using country list instead.`);
   }
 }
