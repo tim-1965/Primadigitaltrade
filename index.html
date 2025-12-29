@@ -14,7 +14,8 @@
   <div id="app"></div>
   <script type="module">
     import TradeAppController from './components/TradeAppController.js';
-    new TradeAppController(document.getElementById('app'));
+    const app = new TradeAppController();
+    app.initialize('app');
   </script>
 </body>
 </html>
